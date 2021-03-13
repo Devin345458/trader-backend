@@ -1,0 +1,38 @@
+version: '3.3'
+services:
+
+  coin-base-redis:
+    image: redis:alpine
+    ports:
+      - "6380:6379"
+
+  redis-commander:
+    container_name: coin-redis-commander
+    hostname: redis-commander
+    image: rediscommander/redis-commander:latest
+    restart: always
+    environment:
+      - REDIS_HOSTS=local:coin-base-redis:6379
+    ports:
+      - "8085:8081"
+
+  coin-base-mariadb:
+    image: mariadb:10.3
+    ports:
+      - 3334:3306
+    volumes:
+      - trader-db:/var/lib/mysql/data
+    restart: unless-stopped
+    environment:
+      MYSQL_USER: root
+      MYSQL_DATABASE: coin-base-trader
+      MYSQL_PASSWORD: 4^ct+6mT?DMf
+      MYSQL_ROOT_PASSWORD: root
+
+volumes:
+  trader-db:
+
+networks:
+  default:
+    external:
+      name: nginx-proxy
