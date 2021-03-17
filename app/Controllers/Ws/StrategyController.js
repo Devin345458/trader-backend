@@ -18,8 +18,7 @@ class StrategyController {
     try {
       let oldStategy = await Strategy.query().where('id', strategy.id).with('profile').firstOrFail()
       oldStategy.merge(strategy)
-      strategy = oldStategy.toJSON()
-      this.TradingStrategy = await this._setUpClass(strategy, initialBalance)
+      this.TradingStrategy = await this._setUpClass(oldStategy, initialBalance)
       const candles = await this._loadCandles(numberOfDays)
       this._setTradeListeners()
 
@@ -93,8 +92,6 @@ class StrategyController {
       }
       let oldStategy = await Strategy.query().where('id', strategy.id).with('profile').firstOrFail()
       oldStategy.merge(strategy)
-      strategy = oldStategy.toJSON()
-
       const Algo = new RunGeneticAlgorithm(strategy, initialBalance, numberOfDays, iterations, populationSize)
       await Algo.run(this.socket)
       const candles = await Algo.candles
