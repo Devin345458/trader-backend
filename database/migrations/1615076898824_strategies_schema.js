@@ -17,7 +17,7 @@ class StrategiesSchema extends Schema {
       table.decimal('depositingAmount')
       table.text('options', "longtext")
       table.integer('user_id').unsigned()
-      table.integer('profile_id').unsigned()``
+      table.integer('profile_id').unsigned()
       table.timestamps()
     })
   }
