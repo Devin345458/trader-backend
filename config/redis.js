@@ -11,8 +11,6 @@
 */
 
 const Env = use('Env')
-const Url = require('url-parse')
-const REDIS_URL = new Url(Env.get('REDIS_URL'))
 
 module.exports = {
   /*
@@ -33,13 +31,7 @@ module.exports = {
   | Configuration for a named connection.
   |
   */
-  local: {
-    host: REDIS_URL.hostname || 'localhost',
-    port: Number(REDIS_URL.port) || 6879,
-    password: REDIS_URL.password || '',
-    db: 0,
-    keyPrefix: ''
-  },
+  local: Env.get('REDIS_URL'),
 
   /*
   |--------------------------------------------------------------------------
