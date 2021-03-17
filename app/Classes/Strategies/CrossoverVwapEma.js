@@ -21,19 +21,12 @@ class CrossoverVwap extends Trader {
       required: true
     },
     {
-      property: 'vwmaOffset',
-      label: 'How far above the VWMA does the price have to be to make a purchase',
-      type: 'Currency',
+      property: 'emaLength',
+      label: 'EMA Length',
+      type: 'number',
       default: 30,
       required: true
     },
-    {
-      property: 'emaOffset',
-      label: 'How far above the price does the VWMA have to be to sell',
-      type: 'Currency',
-      default: 30,
-      required: true
-    }
   ]
 
   // Settings for VWAP
@@ -49,24 +42,28 @@ class CrossoverVwap extends Trader {
 
   async analyze (tick) {
     await super.analyze(tick)
-    const vMapGold = AnalysisTools.vwma(this.tradeHistory, this.strategy.options.vWapLength) // gold
+    const vwma = AnalysisTools.vwma(this.tradeHistory, this.strategy.options.vWapLength)
+    const ema = AnalysisTools.ema(this.tradeHistory, this.strategy.options.emaLength, this.prevEma)
+    this.prevVMA = ema
 
     // If we have don't have all our stats then
-    if (!vMapGold) {
+    if (!vwma || !ema) {
       return
     }
 
-    this.emit('indicators', { time: tick.time, name: 'VMA', indicator: vMapGold, color: '#ffde5a' })
+    this.emit('indicators', { time: tick.time, name: 'VWMA', indicator: vwma, color: '#ffde5a' })
+    this.emit('indicators', { time: tick.time, name: 'EMA', indicator: ema, color: '#2df800' })
     if (!this.sim) {
-      TradeIndicator.addIndicator(this.strategy.id, tick.time, 'vwma', vMapGold)
+      TradeIndicator.addIndicator(this.strategy.id, tick.time, 'VWMA', vwma)
+      TradeIndicator.addIndicator(this.strategy.id, tick.time, 'EMA', ema)
     }
     // this.emit('indicators', { time: tick.time * 1000, name: 'EMA', indicator: emaGreen, color: '#0c5af7' })
 
-    if (!this.positionInfo.positionExists && (tick.close - this.strategy.options.vwmaOffset) > vMapGold) {
+    if (!this.positionInfo.positionExists && vwma > ema) {
       await this.buyPosition(tick.close, tick)
     }
 
-    if (this.positionInfo.positionExists && (tick.close + this.strategy.options.emaOffset) < vMapGold) {
+    if (this.positionInfo.positionExists && vwma < ema) {
       await this.sellPosition(tick.close, tick)
     }
   }
@@ -89,18 +86,10 @@ class CrossoverVwap extends Trader {
     }
 
     if (CrossoverVwap.shouldChange()) {
-      options.emaLen += CrossoverVwap.getRandomNumber(-10, 10)
+      options.emaLength += CrossoverVwap.getRandomNumber(-10, 10)
       if (options.emaLen <= 10) {
         options.emaLen = 10
       }
-    }
-
-    if (CrossoverVwap.shouldChange()) {
-      options.vwmaOffset += CrossoverVwap.getRandomNumber(-30, 30)
-    }
-
-    if (CrossoverVwap.shouldChange()) {
-      options.emaOffset += CrossoverVwap.getRandomNumber(-30, 30)
     }
 
     return options

@@ -11,7 +11,7 @@ class TradesSchema extends Schema {
       table.string('currency', 255)
       table.decimal('quantity')
       table.decimal('profitLoss')
-      table.integer('strategy_id').unsigned().references('id').inTable('strategies')
+      table.integer('strategy_id').unsigned()
       table.timestamps()
     })
   }

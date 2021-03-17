@@ -16,8 +16,8 @@ class StrategiesSchema extends Schema {
       table.boolean('depositingEnabled')
       table.decimal('depositingAmount')
       table.json('options')
-      table.integer('user_id').unsigned().references('id').inTable('users')
-      table.integer('profile_id').unsigned().references('id').inTable('profiles')
+      table.integer('user_id').unsigned()
+      table.integer('profile_id').unsigned()
       table.timestamps()
     })
   }

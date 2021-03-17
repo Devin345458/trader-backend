@@ -29,7 +29,8 @@ class UserController {
   }
 
   async loggedInUser({auth}) {
-    return {user: auth.user}
+    let user = await User.query().where({id: auth.user.id}).with('profiles').firstOrFail()
+    return {user}
   }
 }
 

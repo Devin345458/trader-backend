@@ -16,7 +16,7 @@ function getClass(strategyIndicator) {
  */
 function createClass(strategy, sim = false) {
   const Class = getClass(strategy.indicator)
-  return new Class(strategy, sim)
+  return new Class(sim)
 }
 
 /**
@@ -27,7 +27,7 @@ function createClass(strategy, sim = false) {
  */
 async function createAndInitializeClass(strategy, sim = false) {
   const Class = createClass(strategy, sim)
-  await Class.initialize()
+  await Class.initialize(strategy)
   return Class
 }
 

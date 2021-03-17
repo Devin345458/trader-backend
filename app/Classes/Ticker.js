@@ -1,10 +1,13 @@
-const EventEmitter = require('events')
-const CoinbasePro = require('coinbase-pro')
+import EventEmitter from 'events'
+import {WebsocketClient} from 'coinbase-pro'
 
 const websocketURI = 'wss://ws-feed.pro.coinbase.com'
 const websocketSandboxURI = 'wss://ws-feed-public.sandbox.pro.coinbase.com'
-
-module.exports = class Ticker extends EventEmitter {
+/** @type {Logger} **/
+const Logger = use('Logger')
+/** @type {typeof Ticker} **/
+const TickerTable = use('App/Models/Ticker')
+export default class Ticker extends EventEmitter {
   static init
   prices = {}
 
@@ -14,14 +17,10 @@ module.exports = class Ticker extends EventEmitter {
    * @return {Ticker}
    */
   static getTicker () {
-    this.initialize()
-    return this.init
-  }
-
-  static initialize () {
     if (!this.init) {
       this.init = new this()
     }
+    return this.init
   }
 
   constructor () {
@@ -35,26 +34,19 @@ module.exports = class Ticker extends EventEmitter {
    * Creates the websocket object and turns it on to update the currentPrice
    */
   connect () {
-    sails.log.info('Initializing ticker connect')
-    this.websocket = new CoinbasePro.WebsocketClient(
-      this.coins,
-      this.websocketURI,
-      {},
-      {
-        channels: ['ticker']
-      }
-    )
+    Logger.info('Initializing ticker connect')
+    this.websocket = new WebsocketClient(this.coins, this.websocketURI, false, {channels: ['ticker']})
     // turn on the websocket for errors
     this.websocket.on('error', (err) => {
       const message = 'Error occurred in the ticker websocket.'
       const errorMsg = new Error(err)
-      sails.log.error({ message, errorMsg, err })
+      Logger.error({ message, errorMsg, err })
       this.connect()
     })
 
     // Turn on the websocket for closes to restart it
     this.websocket.on('close', () => {
-      sails.log.debug('Ticker websocket closed, restarting...')
+      Logger.debug('Ticker websocket closed, restarting...')
       this.connect()
     })
 
@@ -62,9 +54,10 @@ module.exports = class Ticker extends EventEmitter {
     this.websocket.on('message', (data) => {
       if (data.type === 'ticker') {
         this.emit(data.coin, data)
-        sails.models.ticker.createFromTicker(data)
+        TickerTable.createFromTicker(data)
       }
     })
+
   }
 
   static addSubscription (coin) {
@@ -82,7 +75,7 @@ module.exports = class Ticker extends EventEmitter {
       this.connect()
       return
     }
-    sails.log.info('Adding ticker coin')
+    Logger.info('Adding ticker coin')
     this.websocket.subscribe({
       channels: [
         {

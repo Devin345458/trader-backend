@@ -18,21 +18,26 @@ class StrategyController {
 
   async edit({ request, auth }) {
     const data = request.all()
-    const strategy = await Strategy.findOrFail(data.id)
+    delete data.profile
+    const strategy = await Strategy.query().where('id', data.id).firstOrFail()
     if (strategy.user_id !== auth.user.id) {
       throw new Error('You are not authorized to edit this profile')
     }
     strategy.merge(data)
     await strategy.save()
-    return {strategy}
+    return {strategyId: strategy.id}
   }
 
   async delete({ auth, params }) {
-    const strategy = await Strategy.findOrFail(params.id)
+    const strategy = await Strategy.find(params.id)
     if (strategy.user_id !== auth.user.id) {
       throw new Error('You are not authorized to delete this profile')
     }
+    await strategy.tradeIndicators().delete()
+    await strategy.trades().delete()
+    await strategy.tradeTickers().delete()
     await strategy.delete()
+
   }
 
   async view({ auth, params }) {

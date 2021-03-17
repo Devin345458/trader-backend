@@ -3,6 +3,7 @@ module.exports = {
     extensions: ['.js'],
     alias: {
       '@': path.resolve(__dirname, 'app'),
+      'App': path.resolve(__dirname, 'app'),
     },
   },
 }

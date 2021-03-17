@@ -1,15 +1,15 @@
 const EventEmitter = use('events')
 const CoinbasePro = use('coinbase-pro')
 const que = use('async/queue')
-/** @type {typeof import('@adonisjs/redis/src/Redis')} */
+/** @type {Redis} */
 const Redis = use('Redis')
 /** @type {typeof import('@adonisjs/framework/src/Config')} */
 const Config = use('Adonis/Src/Config')
-/** @type {typeof import('@adonisjs/framework/src/Logger')} */
+/** @type {Logger} */
 const Logger = use('Logger')
-const Helpers = use('Helpers')
-const sleep = Helpers.promisify(setTimeout)
+/** @type {Strategy} */
 const Strategy = use('App/Models/Strategy')
+/** @type {Trade} */
 const Trade = use('App/Models/Trade')
 const _ = require('lodash')
 
@@ -18,6 +18,7 @@ const _ = require('lodash')
  */
 class Trader extends EventEmitter {
   authedClient
+  /** @type {Strategy} **/
   strategy
   accountIds = {}
   /** @type {typeof import('../Models/Profile')} */
@@ -51,26 +52,21 @@ class Trader extends EventEmitter {
 
   static options = {}
 
-  static getOptions () {
+  static getOptions() {
     return this.defaultOptions.concat(this.options)
   }
 
-  constructor (strategy) {
-    super()
-    this.setStrategy(strategy)
-    Object.keys(strategy.options).forEach((key) => {
-      strategy[key] = strategy.options[key]
-    })
+  async setStrategy(strategy) {
+    this.strategy = strategy
+    this.profile = strategy.getRelated('profile')
+
+  }
+
+  async initialize(strategy) {
+    await this.setStrategy(strategy)
 
     this._createClient()
-  }
 
-  setStrategy (strategy) {
-    this.strategy = strategy
-    this.profile = strategy.profile
-  }
-
-  async initialize () {
     // Retrieve product information:
     this.productInfo = await this.getProductInfo()
 
@@ -83,20 +79,16 @@ class Trader extends EventEmitter {
     }
   }
 
-  async setSim (initialBalance, highestFee = false) {
+  async setSim(initialBalance) {
     this.sim = true
     this.positionInfo = {
       positionExists: false
     }
+
     this.activeAccountBalance = initialBalance
-    if (!highestFee) {
-      this.highestFee = await this.returnHighestFee()
-    } else {
-      this.highestFee = highestFee
-    }
   }
 
-  _createClient () {
+  _createClient() {
     this.authedClient = new CoinbasePro.AuthenticatedClient(
       this.profile.apiKey,
       this.profile.apiSecret,
@@ -110,10 +102,11 @@ class Trader extends EventEmitter {
    *
    * @return {Object} accountObject contains the needed account IDs and profile IDs needed for checking balances and making transfers
    */
-  async getAccountIDs () {
-    let test = JSON.parse(await Redis.get(this.strategy.id + '_accountObject'))
-    if (test) {
-      return test
+  async getAccountIDs() {
+    const key = this.strategy.coin + '_' + this.strategy.user_id + '_accountObject'
+    let accountIds = JSON.parse(await Redis.get(key))
+    if (accountIds) {
+      return accountIds
     }
     Logger.info('Didn\'t find account id in redis storage')
     try {
@@ -135,7 +128,8 @@ class Trader extends EventEmitter {
       // Gets all the profiles belonging to the user and matches the deposit and trading profile IDs
       accountObject.tradeProfileID = this.profile.coinProfileId
 
-      await Redis.set(this.strategy.id + '_accountObject', JSON.stringify(accountObject))
+      await Redis.set(key, JSON.stringify(accountObject))
+      await Redis.expire(key, 3600)
       return accountObject
     } catch (err) {
       const message = 'Error occured in getAccountIDs method.'
@@ -151,11 +145,12 @@ class Trader extends EventEmitter {
    * strings in order to determine to what precision the size and price parameters need to be when placing an order.
    *
    */
-  async getProductInfo () {
+  async getProductInfo() {
     try {
-      let test = JSON.parse(await Redis.get(this.strategy.id + '_productData'))
-      if (test) {
-        return test
+      const key = this.strategy.coin + '_productData'
+      let productInfo = JSON.parse(await Redis.get(key))
+      if (productInfo) {
+        return productInfo
       }
       Logger.info('Didn\'t find product info in redis storage')
       let quoteIncrementRoundValue = 0
@@ -189,7 +184,8 @@ class Trader extends EventEmitter {
 
       productData.quoteIncrementRoundValue = Number(quoteIncrementRoundValue)
       productData.baseIncrementRoundValue = Number(baseIncrementRoundValue)
-      await Redis.set(this.strategy.id + '_productData', JSON.stringify(productData))
+      await Redis.set(key, JSON.stringify(productData))
+      Redis.expire(key, 3600)
       return productData
     } catch (err) {
       const message = 'Error occurred in getProductInfo method.'
@@ -203,67 +199,50 @@ class Trader extends EventEmitter {
    * @param {Number} priceToSell
    * @param {Object} ticker
    */
-  async sellPosition (priceToSell, ticker = {}) {
-    // If there is already a trade waiting to settle return
-    if (this.tradeInProgress) {
-      return
-    }
+  async sellPosition(priceToSell, ticker = {}) {
+    try {
 
-    // Calculate the order size
-    let orderSize
-    if (this.productInfo.baseIncrementRoundValue === 0) {
-      orderSize = Math.trunc(this.activeAccountBalance)
-    } else {
-      orderSize = Number(this.activeAccountBalance).toFixed(this.productInfo.baseIncrementRoundValue)
-    }
-
-    // The order params for the coinbase api request
-    const orderParams = {
-      side: 'sell',
-      price: priceToSell,
-      size: orderSize,
-      // eslint-disable-next-line camelcase
-      product_id: this.strategy.coin,
-      // eslint-disable-next-line camelcase
-      time_in_force: 'FOK'
-    }
-
-    // If simulating set the account balance and emit the order
-    if (this.sim) {
-      this.emit('order', { order: { ...orderParams, time: ticker.time }, positionInfo: this.positionInfo })
-      this.orders.push({ ...orderParams, time: ticker.time, profitLoss: orderParams.price * orderParams.size - this.positionInfo.positionAcquiredCost })
-      this.positionInfo.positionExists = false
-      this.activeAccountBalance = orderSize * priceToSell
-      return
-    }
-
-    // Place sell order with coinbase api
-    const order = await this.authedClient.placeOrder(orderParams)
-
-    // Mark the trade as in progress until coinbase tells us they have settled
-    this.tradeInProgress = true
-
-    Logger.info('Checking sell order result...', this.strategy.id)
-
-    // Loop to wait for order to be filled:
-    for (let i = 0; i < 10 && this.positionInfo.positionExists === true; ++i) {
-      let orderDetails
-      await sleep(6000) // wait 6 seconds
-      try {
-        orderDetails = await this.authedClient.getOrder(order.id) // Get latest order details
-      } catch (err) {
-        const message = 'Error occurred when attempting to get the order.'
-        const errorMsg = new Error(err)
-        Logger.debug(message, errorMsg)
-        continue
+      // Calculate the order size
+      let orderSize
+      if (this.productInfo.baseIncrementRoundValue === 0) {
+        orderSize = Math.trunc(this.activeAccountBalance)
+      } else {
+        orderSize = Number(this.activeAccountBalance).toFixed(this.productInfo.baseIncrementRoundValue)
       }
+
+      // The order params for the coinbase api request
+      const orderParams = {
+        side: 'sell',
+        price: priceToSell,
+        size: orderSize,
+        // eslint-disable-next-line camelcase
+        product_id: this.strategy.coin,
+        // eslint-disable-next-line camelcase
+        time_in_force: 'FOK'
+      }
+
+      // If simulating set the account balance and emit the order
+      if (this.sim) {
+        this.emit('order', {order: {...orderParams, time: ticker.time}, positionInfo: this.positionInfo})
+        this.orders.push({
+          ...orderParams,
+          time: ticker.time,
+          profitLoss: orderParams.price * orderParams.size - (orderParams.price * orderParams.size * 0.05) - this.positionInfo.positionAcquiredCost
+        })
+        this.positionInfo.positionExists = false
+        this.activeAccountBalance = orderSize * priceToSell
+        return
+      }
+
+      // Place sell order with coinbase api
+      const order = await this.authedClient.placeOrder(orderParams)
+      const orderDetails = await this.authedClient.getOrder(order.id)
       Logger.debug(orderDetails)
 
       if (orderDetails.status === 'done') {
         if (orderDetails.done_reason !== 'filled') {
           throw new Error('Sell order did not complete due to being filled? done_reason: ' + orderDetails.done_reason)
         } else {
-          this.tradeInProgress = false
           this.positionInfo.positionExists = false
 
           // Update positionData file:
@@ -272,11 +251,7 @@ class Trader extends EventEmitter {
           strategy.save()
 
           const profit = parseFloat(orderDetails.executed_value) - parseFloat(orderDetails.fill_fees) - this.positionInfo.positionAcquiredCost
-          await Logger.debug(
-            'buy',
-            `Successfully sold ${orderSize} ${this.productInfo.base_currency} for ${priceToSell} with a PNL of ${profit}`,
-            this.strategy.id
-          )
+          await Logger.debug(`Successfully sold ${orderSize} ${this.productInfo.base_currency} for ${priceToSell} with a PNL of ${profit}` + ' Strategy: ' + this.strategy.id)
           await Trade.addTrade(this.strategy.id, 'sell', this.productInfo.quote_currency, orderSize, profit)
 
           if (profit > 0) {
@@ -295,21 +270,14 @@ class Trader extends EventEmitter {
 
               Logger.info('transfer result: ' + transferResult, this.strategy.id)
             }
-          } else {
-            Logger.error('Sell was not profitable. profit: ' + profit, this.strategy.id)
           }
         }
       }
-    }
-
-    // Check if order wasn't filled and needs cancelled:
-    if (this.positionInfo.positionExists === true) {
-      this.tradeInProgress = false
-      const cancelOrder = await this.authedClient.cancelOrder(order.id)
-      if (cancelOrder !== order.id) {
-        Logger.error('Attempted to cancel failed order but it did not work. cancelOrderReturn: ' + cancelOrder + 'orderID: ' + order.id, this.strategy.id)
-        throw new Error('Attempted to cancel failed order but it did not work. cancelOrderReturn: ' + cancelOrder + 'orderID: ' + order.id)
+    } catch (e) {
+      if (e.message === 'HTTP 400 Error: time in force') {
+        return
       }
+      throw new Error('Error occurred in sellPosition method.' + e.message)
     }
   }
 
@@ -321,12 +289,10 @@ class Trader extends EventEmitter {
    * @param {Number} priceToBuy
    * @param {Object} ticker
    */
-  async buyPosition (priceToBuy, ticker = {}) {
+  async buyPosition(priceToBuy, ticker = {}) {
     try {
-      if (this.tradeInProgress) {
-        return
-      }
-      priceToBuy = Number(priceToBuy)
+
+      priceToBuy = Number(priceToBuy) + 1
       const balance = this.activeAccountBalance - this.balanceMinimum // Subtract this dollar amount so that there is room for rounding errors
       const amountToSpend = balance - (balance * this.highestFee)
       let orderSize
@@ -348,8 +314,8 @@ class Trader extends EventEmitter {
       }
 
       if (this.sim) {
-        this.emit('order', { order: { ...orderParams, time: ticker.time }, positionInfo: this.positionInfo })
-        this.orders.push({ ...orderParams, time: ticker.time })
+        this.emit('order', {order: {...orderParams, time: ticker.time}, positionInfo: this.positionInfo})
+        this.orders.push({...orderParams, time: ticker.time})
         this.positionInfo.positionExists = true
         this.positionInfo.positionAcquiredPrice = priceToBuy
         this.positionInfo.positionAcquiredCost = priceToBuy * orderSize + this.highestFee
@@ -358,61 +324,34 @@ class Trader extends EventEmitter {
       }
 
       // Place buy order
-      this._createClient()
       const order = await this.authedClient.placeOrder(orderParams)
 
-      // Loop to wait for order to be filled:
-      Logger.info('Checking buy order result...', this.strategy.id)
-      for (let i = 0; i < 10 && this.positionInfo.positionExists === false; ++i) {
-        let orderDetails
-        await sleep(6000) // wait 6 seconds
-        try {
-          orderDetails = await this.authedClient.getOrder(order.id) // Get latest order details
-        } catch (err) {
-          const message = 'Error occured when attempting to get the order.'
-          const errorMsg = new Error(err)
-          await Logger.error(message, this.strategy.id)
-          await Logger.error(errorMsg.body, this.strategy.id)
-          continue
-        }
-        Logger.debug(orderDetails)
+      const orderDetails = await this.authedClient.getOrder(order.id) // Get latest order details
+      Logger.debug(orderDetails)
 
-        if (orderDetails.status === 'done') {
-          if (orderDetails.done_reason !== 'filled') {
-            await Logger.error('Buy order did not complete due to being filled? done_reason: ' + orderDetails.done_reason, this.strategy.id)
-            throw new Error('Buy order did not complete due to being filled? done_reason: ' + orderDetails.done_reason)
-          } else {
-            // Update position info
-            this.positionInfo.positionExists = true
-            this.positionInfo.positionAcquiredPrice = parseFloat(orderDetails.executed_value) / parseFloat(orderDetails.filled_size)
-            this.positionInfo.positionAcquiredCost = parseFloat(orderDetails.executed_value) + parseFloat(orderDetails.fill_fees)
+      if (orderDetails.status === 'done') {
+        if (orderDetails.done_reason !== 'filled') {
+          await Logger.error('Buy order did not complete due to being filled? done_reason: ' + orderDetails.done_reason, this.strategy.id)
+          throw new Error('Buy order did not complete due to being filled? done_reason: ' + orderDetails.done_reason)
+        } else {
+          // Update position info
+          this.positionInfo.positionExists = true
+          this.positionInfo.positionAcquiredPrice = parseFloat(orderDetails.executed_value) / parseFloat(orderDetails.filled_size)
+          this.positionInfo.positionAcquiredCost = parseFloat(orderDetails.executed_value) + parseFloat(orderDetails.fill_fees)
 
-            // Update positionData file:
-            const strategy = await Strategy.findOrFail(this.strategy.id);
-            strategy.positionInfo = this.positionInfo
-            strategy.save()
+          // Update positionData file:
+          this.strategy.positionInfo = this.positionInfo
+          await this.strategy.save()
 
-            await Logger.info(
-              'buy',
-              `Successfully purchased ${orderSize} ${this.productInfo.base_currency} for ${priceToBuy}`,
-              this.strategy.id
-            )
-            await Trade.addTrade(this.strategy.id, 'buy', this.productInfo.base_currency, orderSize)
-          }
+          await Logger.info(`Successfully purchased ${orderSize} ${this.productInfo.base_currency} for ${priceToBuy}` + ' Strategy ' + this.strategy.id)
+          await Trade.addTrade(this.strategy.id, 'buy', this.productInfo.base_currency, orderSize)
         }
       }
-
-      // Check if order wasn't filled and needs cancelled
-      if (this.positionInfo.positionExists === false) {
-        const cancelOrder = await this.authedClient.cancelOrder(order.id)
-        if (cancelOrder !== order.id) {
-          throw new Error('Attempted to cancel failed order but it did not work. cancelOrderReturn: ' + cancelOrder + 'orderID: ' + order.id)
-        }
+    } catch (e) {
+      if (e.message === 'HTTP 400 Error: time in force') {
+        return
       }
-    } catch (err) {
-      const message = 'Error occurred in buyPosition method.'
-      const errorMsg = new Error(err)
-      Logger.error({ message, errorMsg, err })
+      throw new Error('Error occurred in buyPosition method.' + e.message)
     }
   }
 
@@ -421,13 +360,24 @@ class Trader extends EventEmitter {
    *
    * @return {number} highestFee The highest fee between the taker and maker fee
    */
-  async returnHighestFee () {
+  async returnHighestFee() {
     try {
-      const feeResult = await this.authedClient.get(['fees'])
+      const fees = JSON.parse(await Redis.get('user_fees_' + this.strategy.user_id))
+      if (fees) {
+        if (fees.makerFee > fees.takerFee) {
+          return fees.makerFee
+        } else {
+          return fees.takerFee
+        }
+      }
 
+      const feeResult = await this.authedClient.get(['fees'])
       const makerFee = parseFloat(feeResult.maker_fee_rate)
       const takerFee = parseFloat(feeResult.taker_fee_rate)
-
+      await Redis.set('user_fees_' + this.strategy.user_id, JSON.stringify({
+        makerFee,
+        takerFee
+      }))
       if (makerFee > takerFee) {
         return makerFee
       } else {
@@ -436,7 +386,7 @@ class Trader extends EventEmitter {
     } catch (err) {
       const message = 'Error occurred in getFees method.'
       const errorMsg = new Error(err)
-      Logger.error({ message, errorMsg, err })
+      Logger.error({message, errorMsg, err})
       throw err
     }
   }
@@ -445,16 +395,21 @@ class Trader extends EventEmitter {
    * Stub for the function called by classes extending this
    * @return {Promise<void>}
    */
-  async analyze (tick) {
-    if (!this.que) { return }
+  async analyze(tick) {
+    if (!this.que) {
+      return
+    }
     this.tradeHistory.push(tick)
+
     if (!this.sim) {
       this.highestFee = await this.returnHighestFee()
       await this.getCurrencyBalance()
+    } else {
+      this.highestFee = 0.05
     }
   };
 
-  async getCurrencyBalance () {
+  async getCurrencyBalance() {
     if (this.positionInfo.positionExists) {
       const baseCurrencyAccount = await this.authedClient.getAccount(this.accountIDs.baseCurrencyAccountID) // Grab account information to view balance
       if (baseCurrencyAccount.available <= 0) {
@@ -483,7 +438,7 @@ class Trader extends EventEmitter {
    * @param max
    * @return {number}
    */
-  static getRandomNumber (min, max) {
+  static getRandomNumber(min, max) {
     min = Math.ceil(min)
     max = Math.floor(max)
     return Math.floor(Math.random() * (max - min + 1)) + min
@@ -494,11 +449,11 @@ class Trader extends EventEmitter {
    *
    * @return {boolean}
    */
-  static shouldChange () {
+  static shouldChange() {
     return Math.random() < 0.5
   }
 
-  static crossover (optionsA, optionsB) {
+  static crossover(optionsA, optionsB) {
     optionsA.score = -10000000000
     optionsB.score = -10000000000
     if (Trader.shouldChange()) {
@@ -514,7 +469,7 @@ class Trader extends EventEmitter {
     return (Math.random() < 0.5) ? optionsA : optionsB
   }
 
-  static mutation (options) {
+  static mutation(options) {
     options.score = -10000000000
     if (Trader.shouldChange()) {
       options.interval += Trader.getRandomNumber(-8, 8)
@@ -533,4 +488,5 @@ class Trader extends EventEmitter {
     return options
   }
 }
+
 module.exports = Trader

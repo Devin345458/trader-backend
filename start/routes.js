@@ -13,7 +13,7 @@
 |
 */
 
-/** @type {typeof import('@adonisjs/framework/src/Route/Manager')} */
+/** @type {typeof Route} */
 const Route = use('Route')
 
 Route.get('/', () => {
@@ -53,5 +53,13 @@ Route.get('/v1/strategies', 'V1/StrategyController.index').middleware(['auth'])
 Route.get('/v1/strategies/:id', 'V1/StrategyController.view').middleware(['auth'])
 Route.get('/v1/strategies/options/:indicator', 'V1/StrategyController.options').middleware(['auth'])
 Route.post('/v1/strategies', 'V1/StrategyController.add').middleware(['auth']).validator('Strategy')
-Route.patch('/v1/strategies', 'V1/StrategyController.edit').middleware(['auth']).validator('Strategy')
+Route.patch('/v1/strategies', 'V1/StrategyController.edit').middleware(['auth'])
 Route.delete('/v1/strategies/:id', 'V1/StrategyController.delete').middleware(['auth'])
+
+
+/**
+ * Trade Routes
+ */
+Route.get('/v1/trades/strategy/:id', 'V1/TradeController.strategy').middleware(['auth'])
+Route.get('/v1/trades/get-ticks/:id', 'V1/TradeController.getTicks').middleware(['auth'])
+Route.get('/v1/trades/get-indicators/:id', 'V1/TradeController.getIndicators').middleware(['auth'])

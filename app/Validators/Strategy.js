@@ -13,8 +13,6 @@ class Strategy {
       indicator: 'required',
       type: 'required|in:Live,Paper',
       coin: 'required',
-      // depositingEnabled: 'required',
-      // depositingAmount: 'required',
       options: 'required',
       profile_id: 'exists:profiles,id',
     }

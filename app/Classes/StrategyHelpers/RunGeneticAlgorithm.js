@@ -5,7 +5,9 @@ const {createAndInitializeClass, getClass} = require('../../Classes/StrategyHelp
 /** @type {typeof import('@adonisjs/framework/src/Logger')} */
 const Logger = use('Logger')
 const Redis = use('Redis')
+/** @type {typeof import('@/Classes/StrategyHelpers/GetPriceHistory')} */
 const GetPriceHistory = use('App/Classes/StrategyHelpers/GetPriceHistory')
+const Strategy = use ('App/Models/Strategy')
 
 class RunGeneticAlgorithm {
   strategy
@@ -13,6 +15,7 @@ class RunGeneticAlgorithm {
   numberOfDays
   iterations
   populationSize
+  candles
 
   constructor (strategy, initialBalance, numberOfDays, iterations, populationSize) {
     this.setOptions(strategy, initialBalance, numberOfDays, iterations, populationSize)
@@ -49,11 +52,14 @@ class RunGeneticAlgorithm {
     for (let loop = 1; loop <= this.iterations; loop++) {
       const startTime = moment()
       await ga.evolve()
-      Logger.info('Time Taken: ' + moment().diff(startTime))
+      Logger.info('Time Taken: ' + moment().diff(startTime, 'seconds'))
       socket.emit('message', {
-        iteration: loop,
-        best_value: ga.bestScore(),
-        best_options: ga.best()
+        type: 'iteration',
+        data: {
+          iteration: loop,
+          best_value: ga.bestScore(),
+          best_options: ga.best()
+        }
       })
     }
   }
@@ -61,22 +67,24 @@ class RunGeneticAlgorithm {
   async getCandles () {
     let candles = JSON.parse(await Redis.get('strategy_' + this.strategy.coin + '_candles_' + this.numberOfDays))
     if (candles) {
-      return candles
+      this.candles = candles
+      return
     }
-    candles = await GetPriceHistory(this.numberOfDays, this.strategy.coin, this.strategy.user)
-    await Redis.set('strategy_' + this.strategy.coin + '_candles_' + this.numberOfDays, JSON.stringify(candles), 6000)
-    return candles
+    candles = await GetPriceHistory(this.numberOfDays, this.strategy.coin, this.strategy.profile)
+    await Redis.set('strategy_' + this.strategy.coin + '_candles_' + this.numberOfDays, JSON.stringify(candles))
+    this.candles = candles
   }
 
   async _fitnessFunction (options) {
     try {
+      const startTime = moment()
       const clonedStrategy = JSON.parse(JSON.stringify(this.strategy))
       clonedStrategy.options = options
       const tradingStrategy = await createAndInitializeClass(clonedStrategy, true)
-      await tradingStrategy.setSim(this.initialBalance, 0.0018)
+      await tradingStrategy.setSim(this.initialBalance)
 
-      const candles = await this.getCandles()
-      for (let i = 0; i < candles.length; i = i + tradingStrategy.strategy.interval) {
+      const candles = this.candles
+      for (let i = 0; i < candles.length; i = i + tradingStrategy.strategy.options.interval) {
         await tradingStrategy.analyze({
           coin: this.strategy.coin,
           close: candles[i].close,
@@ -85,9 +93,10 @@ class RunGeneticAlgorithm {
         })
       }
 
+      Logger.info('Fitness Function Run Time: ' + moment().diff(startTime, 'seconds'))
       return tradingStrategy.orders.filter(a => a.profitLoss).reduce((total, a) => total + a.profitLoss, 0)
     } catch (e) {
-      console.log(e)
+      console.log('Genetic Model Error', e)
     }
   }
 }

@@ -1,13 +1,26 @@
 'use strict'
 
-/** @type {typeof import('@adonisjs/lucid/src/Lucid/Model')} */
+/** @type {Model} */
 const Model = use('Model')
-/** @type {typeof import('@adonisjs/framework/src/Logger')} */
+/** @type {Logger} */
 const Logger = use('Logger')
+/** @type {Ws} */
+const Ws = use('Ws')
 
 class Trade extends Model {
 
-  async addTrade (strategyId, side, currency, quantity, profitLoss = null) {
+  static boot() {
+    super.boot()
+
+    this.addHook('afterCreate', async (trade) => {
+      const topic = Ws.getChannel('bot-socket:*').topic('bot-socket:' + trade.strategy_id)
+      if(topic){
+        topic.broadcast('trade', trade)
+      }
+    })
+  }
+
+  static async addTrade (strategyId, side, currency, quantity, profitLoss = null) {
     try {
       await Trade.create({
         currency,

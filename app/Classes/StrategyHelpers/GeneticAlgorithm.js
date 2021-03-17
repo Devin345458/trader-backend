@@ -54,8 +54,9 @@ class GeneticAlgorithm {
     }
 
     const test = async ({ phenotype, competitor }) => {
-      phenotype.score = await this.settings.fitnessFunction(phenotype)
-      competitor.score = await this.settings.fitnessFunction(competitor)
+      let scores = await Promise.all([this.settings.fitnessFunction(phenotype), this.settings.fitnessFunction(competitor)])
+      phenotype.score = scores[0]
+      competitor.score = scores[1]
 
       nextGeneration.push(phenotype)
       if (phenotype.score >= competitor.score) {

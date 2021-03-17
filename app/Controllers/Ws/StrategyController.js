@@ -2,34 +2,52 @@
 
 const Redis = use('Redis')
 import run from "@/Classes/StrategyHelpers/PerfectTrading"
-import { createAndInitializeClass } from '@/Classes/StrategyHelpers/IndicatorFinder'
+import {createAndInitializeClass} from '@/Classes/StrategyHelpers/IndicatorFinder'
 import GetPriceHistory from '@/Classes/StrategyHelpers/GetPriceHistory'
 import RunGeneticAlgorithm from "@/Classes/StrategyHelpers/RunGeneticAlgorithm"
 
+const Strategy = use('App/Models/Strategy')
+
 class StrategyController {
-  constructor ({ socket, request }) {
+  constructor({socket, request}) {
     this.socket = socket
     this.request = request
   }
 
-  async onRunSim({ initialBalance, numberOfDays, strategy }) {
+  async onRunSim({initialBalance, numberOfDays, strategy}) {
     try {
+      let oldStategy = await Strategy.query().where('id', strategy.id).with('profile').firstOrFail()
+      oldStategy.merge(strategy)
+      strategy = oldStategy.toJSON()
       this.TradingStrategy = await this._setUpClass(strategy, initialBalance)
       const candles = await this._loadCandles(numberOfDays)
       this._setTradeListeners()
 
-      let lastEmitted;
-      for (let i = 0; i < candles.length; i = i + this.TradingStrategy.strategy.interval) {
-        if (i % (10 * this.TradingStrategy.strategy.interval) === 0 && i !== 0) {
-          const ticks = []
-          for (let y = i - (10 * this.TradingStrategy.strategy.interval); y < i; y += this.TradingStrategy.strategy.interval) {
-            ticks.push(candles[y])
-            lastEmitted = y
-          }
+      let tmpIndicators = []
+      this.TradingStrategy.on('indicators', ({name, indicator, time}) => {
+        tmpIndicators.push({
+          name,
+          indicator,
+          time
+        })
+        if (tmpIndicators.length === 100) {
+          this.socket.emit('message', {
+            type: 'indicator',
+            data: tmpIndicators
+          })
+          tmpIndicators = []
+        }
+      })
+
+      let tmpCandles = [];
+      for (let i = 0; i < candles.length; i = i + this.TradingStrategy.strategy.options.interval) {
+        tmpCandles.push(candles[i])
+        if (tmpCandles.length >= candles.length / 30) {
           await this.socket.emit('message', {
             type: 'ticks',
-            data: ticks
+            data: tmpCandles
           })
+          tmpCandles = []
         }
         await this.TradingStrategy.analyze({
           coin: strategy.coin,
@@ -40,11 +58,19 @@ class StrategyController {
       }
 
       // Catch any not emitted candles
-      for (let i = lastEmitted; i < candles.length; i = i + this.TradingStrategy.strategy.interval) {
+      if (tmpCandles.length) {
         await this.socket.emit('message', {
           type: 'ticks',
-          data: [candles[i]]
+          data: tmpCandles
         })
+      }
+
+      if (tmpIndicators.length === 100) {
+        this.socket.emit('message', {
+          type: 'indicator',
+          data: tmpIndicators
+        })
+        tmpIndicators = []
       }
 
       // Once done sell any remaining position
@@ -59,17 +85,26 @@ class StrategyController {
 
   async onRunGenetic({initialBalance, numberOfDays, iterations, populationSize, strategy}) {
     try {
-      if (!iterations) { iterations = 10 }
-      if (!populationSize) { populationSize = 10 }
+      if (!iterations) {
+        iterations = 10
+      }
+      if (!populationSize) {
+        populationSize = 10
+      }
+      let oldStategy = await Strategy.query().where('id', strategy.id).with('profile').firstOrFail()
+      oldStategy.merge(strategy)
+      strategy = oldStategy.toJSON()
 
       const Algo = new RunGeneticAlgorithm(strategy, initialBalance, numberOfDays, iterations, populationSize)
       await Algo.run(this.socket)
+      const candles = await Algo.candles
+      this._calculateBestPNL(candles, initialBalance)
     } catch (e) {
       this.socket.emit("error", {message: e.message})
     }
   }
 
-  async _setUpClass (strategy, initialBalance) {
+  async _setUpClass(strategy, initialBalance) {
     /** @var {Trader} TradingStrategy **/
     const TradingStrategy = await createAndInitializeClass(strategy, true)
     await TradingStrategy.setSim(initialBalance)
@@ -81,7 +116,7 @@ class StrategyController {
    * @param numberOfDays
    * @return {Promise<Array>}
    */
-  async _loadCandles (numberOfDays) {
+  async _loadCandles(numberOfDays) {
     let candles = JSON.parse(await Redis.get('strategy_' + this.TradingStrategy.strategy.coin + '_candles_' + numberOfDays))
     if (!candles) {
       candles = await GetPriceHistory(numberOfDays, this.TradingStrategy.strategy.coin, this.TradingStrategy.profile)
@@ -90,8 +125,8 @@ class StrategyController {
     return candles
   }
 
-  _setTradeListeners () {
-    this.TradingStrategy.on('order', ({ order, positionInfo }) => {
+  _setTradeListeners() {
+    this.TradingStrategy.on('order', ({order, positionInfo}) => {
       if (order.side === 'sell') {
         order.profitLoss = order.price * order.size - positionInfo.positionAcquiredCost
       }
@@ -100,22 +135,10 @@ class StrategyController {
         data: order
       })
     })
-
-    this.TradingStrategy.on('indicators', ({ name, indicator, time }) => {
-      this.socket.emit('message', {
-        type: 'indicator',
-        data: {
-          name,
-          indicator,
-          time
-        }
-      })
-    })
   }
 
-  _calculateBestPNL (candles, initialBalance) {
+  _calculateBestPNL(candles, initialBalance) {
     const bestPNL = run(candles, initialBalance)
-    console.log('bestPNL', bestPNL)
     this.socket.emit('message', {
       type: 'best',
       data: bestPNL.toFixed(2)

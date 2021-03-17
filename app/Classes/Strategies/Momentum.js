@@ -50,13 +50,13 @@ class Momentum extends Trader {
       const receivedValue = (this.lastValleyPrice * this.activeAccountBalance) - ((this.lastValleyPrice * this.activeAccountBalance) * this.highestFee)
 
       // Highest price we can sell at
-      const target = this.lastPeakPrice - this.strategy.trailingSellPrice
+      const target = this.lastPeakPrice - this.strategy.options.trailingSellPrice
 
       // Check if the dip is greater than our allowed sale dip and we are profitable
       const optimalSellPosition = target >= this.lastValleyPrice && receivedValue > this.positionInfo.positionAcquiredCost
 
       // Check if our bailout condition has been met
-      const bailOutPosition = this.positionInfo.positionAcquiredCost - receivedValue >= this.strategy.bailOutPoint
+      const bailOutPosition = this.positionInfo.positionAcquiredCost - receivedValue >= this.strategy.options.bailOutPoint
 
       // Should we sell
       if (optimalSellPosition || bailOutPosition) {
@@ -78,7 +78,7 @@ class Momentum extends Trader {
       // New peak hit, track peak price and check buy conditions
       this.lastPeakPrice = ticker.close
 
-      const target = this.lastValleyPrice + this.strategy.trailingBuyPrice
+      const target = this.lastValleyPrice + this.strategy.options.trailingBuyPrice
 
       if (this.lastPeakPrice >= target) {
         // Create a new authenticated client to prevent it from expiring or hitting API limits
