@@ -12,12 +12,12 @@ class StrategiesSchema extends Schema {
       table.string('indicator', 255)
       table.string('type', 255)
       table.string('coin', 255)
-      table.json('positionInfo')
+      table.text('positionInfo', "longtext")
       table.boolean('depositingEnabled')
       table.decimal('depositingAmount')
-      table.json('options')
+      table.text('options', "longtext")
       table.integer('user_id').unsigned()
-      table.integer('profile_id').unsigned()
+      table.integer('profile_id').unsigned()``
       table.timestamps()
     })
   }

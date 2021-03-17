@@ -11,6 +11,8 @@
 */
 
 const Env = use('Env')
+const Url = require('url-parse')
+const REDIS_URL = new Url(Env.get('REDIS_URL'))
 
 module.exports = {
   /*
@@ -32,8 +34,8 @@ module.exports = {
   |
   */
   local: {
-    host: '127.0.0.1',
-    port: 6380,
+    host: Env.get('REDIS_HOST', REDIS_URL.host),
+    port: Env.get('REDIS_PORT', REDIS_URL.port),
     password: null,
     db: 0,
     keyPrefix: ''
