@@ -34,9 +34,9 @@ module.exports = {
   |
   */
   local: {
-    host: Env.get('REDIS_HOST', REDIS_URL.host),
-    port: Env.get('REDIS_PORT', REDIS_URL.port),
-    password: Env.get('REDIS_PASSWORD', REDIS_URL.password),
+    host: REDIS_URL.hostname || 'localhost',
+    port: Number(REDIS_URL.port) || 6879,
+    password: REDIS_URL.password || '',
     db: 0,
     keyPrefix: ''
   },
@@ -64,3 +64,5 @@ module.exports = {
     }]
   }
 }
+
+console.log(module.exports.local)
