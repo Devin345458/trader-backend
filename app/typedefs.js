@@ -21,7 +21,7 @@
  *  Models  *
  ***********/
 
-/** @typedef {typeof import('@/Models/Strategy')} Strategy */
+/** @typedef {import('@/Models/Strategy')} StrategyModel */
 /** @typedef {typeof import('@/Models/TradeTicker')} TradeTicker */
 /** @typedef {typeof import('@/Models/Ticker')} Ticker */
 

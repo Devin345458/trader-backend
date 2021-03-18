@@ -92,7 +92,7 @@ class StrategyController {
       }
       let oldStategy = await Strategy.query().where('id', strategy.id).with('profile').firstOrFail()
       oldStategy.merge(strategy)
-      const Algo = new RunGeneticAlgorithm(strategy, initialBalance, numberOfDays, iterations, populationSize)
+      const Algo = new RunGeneticAlgorithm(oldStategy.toObject(), initialBalance, numberOfDays, iterations, populationSize)
       await Algo.run(this.socket)
       const candles = await Algo.candles
       this._calculateBestPNL(candles, initialBalance)

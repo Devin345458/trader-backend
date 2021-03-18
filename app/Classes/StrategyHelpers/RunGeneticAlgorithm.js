@@ -18,7 +18,7 @@ class RunGeneticAlgorithm {
   candles
 
   constructor (strategy, initialBalance, numberOfDays, iterations, populationSize) {
-    this.setOptions(strategy, initialBalance, numberOfDays, iterations, populationSize)
+    this.setOptions(...arguments)
   }
 
   setOptions (strategy, initialBalance, numberOfDays, iterations, populationSize) {

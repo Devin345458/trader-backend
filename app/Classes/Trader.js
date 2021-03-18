@@ -31,6 +31,7 @@ class Trader extends EventEmitter {
   sim = false
   activeAccountBalance = 0
   orders = []
+  options = {}
   positionInfo = {
     positionExists: false
   }
@@ -56,14 +57,9 @@ class Trader extends EventEmitter {
     return this.defaultOptions.concat(this.options)
   }
 
-  async setStrategy(strategy) {
-    this.strategy = strategy
-    this.profile = strategy.getRelated('profile')
-
-  }
-
   async initialize(strategy) {
-    await this.setStrategy(strategy)
+    this.profile = strategy.profile
+    this.strategy = strategy
 
     this._createClient()
 
@@ -248,7 +244,7 @@ class Trader extends EventEmitter {
           // Update positionData file:
           const strategy = await Strategy.findOrFail(this.strategy.id);
           strategy.positionInfo = this.positionInfo
-          strategy.save()
+          await strategy.save()
 
           const profit = parseFloat(orderDetails.executed_value) - parseFloat(orderDetails.fill_fees) - this.positionInfo.positionAcquiredCost
           await Logger.debug(`Successfully sold ${orderSize} ${this.productInfo.base_currency} for ${priceToSell} with a PNL of ${profit}` + ' Strategy: ' + this.strategy.id)
@@ -341,7 +337,10 @@ class Trader extends EventEmitter {
 
           // Update positionData file:
           this.strategy.positionInfo = this.positionInfo
-          await this.strategy.save()
+          const strategy = await Strategy.findOrFail(this.strategy.id);
+          strategy.positionInfo = this.positionInfo
+          await strategy.save()
+
 
           await Logger.info(`Successfully purchased ${orderSize} ${this.productInfo.base_currency} for ${priceToBuy}` + ' Strategy ' + this.strategy.id)
           await Trade.addTrade(this.strategy.id, 'buy', this.productInfo.base_currency, orderSize)
