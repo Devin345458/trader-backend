@@ -18,7 +18,7 @@ class StrategyController {
     try {
       let oldStategy = await Strategy.query().where('id', strategy.id).with('profile').firstOrFail()
       oldStategy.merge(strategy)
-      this.TradingStrategy = await this._setUpClass(oldStategy, initialBalance)
+      this.TradingStrategy = await this._setUpClass(oldStategy.toObject(), initialBalance)
       const candles = await this._loadCandles(numberOfDays)
       this._setTradeListeners()
 

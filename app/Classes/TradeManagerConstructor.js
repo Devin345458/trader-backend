@@ -39,7 +39,7 @@ class TradeManagerConstructor {
 
       let instance;
       try {
-        instance = await createAndInitializeClass(strategy)
+        instance = await createAndInitializeClass(strategy.toObject())
       } catch (e) {
         strategy.error = e.message
         strategy.enabled = false
@@ -89,7 +89,7 @@ class TradeManagerConstructor {
     let strategies = await Strategy.query().where({enabled: true}).with('profile').fetch()
     Logger.info(`Found ${strategies.rows.length} active strategies`)
     strategies.rows.forEach((strategy) => {
-      this.addStrategy(strategy)
+      this.addStrategy(strategy.toObject())
     })
   }
 }
