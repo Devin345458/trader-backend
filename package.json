@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "nodemon -r esm -r module-alias/register --inspect server.js",
     "start": "node -r esm -r module-alias/register server.js",
+    "migrate": "node -r esm -r module-alias/register ace migration:run",
+    "rollback": "node -r esm -r module-alias/register ace migration:rollback",
     "test": "node ace test"
   },
   "keywords": [

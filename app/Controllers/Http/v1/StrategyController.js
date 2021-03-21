@@ -55,6 +55,33 @@ class StrategyController {
     }
     return {options: trader.getOptions()}
   }
+
+  async start({ params, auth }) {
+    const strategy = await Strategy.query().where('id', params.id).firstOrFail()
+    if (strategy.user_id !== auth.user.id) {
+      throw new Error('You are not authorized to edit this profile')
+    }
+    strategy.enabled = true
+    await strategy.save()
+  }
+
+  async setOptions({params, auth, request}) {
+    const strategy = await Strategy.query().where('id', params.id).firstOrFail()
+    if (strategy.user_id !== auth.user.id) {
+      throw new Error('You are not authorized to edit this profile')
+    }
+    strategy.options = request.all()
+    await strategy.save()
+  }
+
+  async stop({ params, auth }) {
+    const strategy = await Strategy.query().where('id', params.id).firstOrFail()
+    if (strategy.user_id !== auth.user.id) {
+      throw new Error('You are not authorized to edit this profile')
+    }
+    strategy.enabled = false
+    await strategy.save()
+  }
 }
 
 module.exports = StrategyController

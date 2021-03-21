@@ -82,24 +82,6 @@ class StrategyController {
     }
   }
 
-  async onRunGenetic({initialBalance, numberOfDays, iterations, populationSize, strategy}) {
-    try {
-      if (!iterations) {
-        iterations = 10
-      }
-      if (!populationSize) {
-        populationSize = 10
-      }
-      let oldStategy = await Strategy.query().where('id', strategy.id).with('profile').firstOrFail()
-      oldStategy.merge(strategy)
-      const Algo = new RunGeneticAlgorithm(oldStategy.toObject(), initialBalance, numberOfDays, iterations, populationSize)
-      await Algo.run(this.socket)
-      const candles = await Algo.candles
-      this._calculateBestPNL(candles, initialBalance)
-    } catch (e) {
-      this.socket.emit("error", {message: e.message})
-    }
-  }
 
   async _setUpClass(strategy, initialBalance) {
     /** @var {Trader} TradingStrategy **/

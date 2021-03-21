@@ -16,6 +16,5 @@
 const Ws = use('Ws')
 
 Ws.channel('strategy:*', 'StrategyController').middleware(['auth'])
-Ws.channel('bot-socket:*', function (socket) {
-
-}).middleware(['auth'])
+Ws.channel('bot-socket:*', function (socket) {}).middleware(['auth'])
+Ws.channel('genetic-run:*', function (socket) {}).middleware(['auth'])

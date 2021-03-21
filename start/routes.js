@@ -55,6 +55,9 @@ Route.get('/v1/strategies/options/:indicator', 'v1/StrategyController.options').
 Route.post('/v1/strategies', 'v1/StrategyController.add').middleware(['auth']).validator('Strategy')
 Route.patch('/v1/strategies', 'v1/StrategyController.edit').middleware(['auth'])
 Route.delete('/v1/strategies/:id', 'v1/StrategyController.delete').middleware(['auth'])
+Route.put('/v1/strategies/start/:id', 'v1/StrategyController.start').middleware(['auth'])
+Route.put('/v1/strategies/stop/:id', 'v1/StrategyController.stop').middleware(['auth'])
+Route.post('/v1/strategies/set-options/:id', 'v1/StrategyController.setOptions').middleware(['auth'])
 
 
 /**
@@ -63,3 +66,11 @@ Route.delete('/v1/strategies/:id', 'v1/StrategyController.delete').middleware(['
 Route.get('/v1/trades/strategy/:id', 'v1/TradeController.strategy').middleware(['auth'])
 Route.get('/v1/trades/get-ticks/:id', 'v1/TradeController.getTicks').middleware(['auth'])
 Route.get('/v1/trades/get-indicators/:id', 'v1/TradeController.getIndicators').middleware(['auth'])
+
+
+/**
+ * Genetic Runs
+ */
+Route.get('/v1/genetic-runs/strategy/:id', 'v1/GeneticRunController.strategy').middleware(['auth'])
+Route.delete('/v1/genetic-runs/delete/:id', 'v1/GeneticRunController.delete').middleware(['auth'])
+Route.post('/v1/genetic-runs/start', 'v1/GeneticRunController.start').middleware(['auth'])

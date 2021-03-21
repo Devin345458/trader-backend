@@ -1,15 +1,13 @@
-const moment = require('moment')
+import moment from "moment"
+import GeneticAlgorithm from '@/Classes/StrategyHelpers/GeneticAlgorithm'
+import {createAndInitializeClass, getClass} from '@/Classes/StrategyHelpers/IndicatorFinder'
+import EventEmitter from "events";
 
-const GeneticAlgorithm = require('./GeneticAlgorithm')
-const {createAndInitializeClass, getClass} = require('../../Classes/StrategyHelpers/IndicatorFinder');
-/** @type {typeof import('@adonisjs/framework/src/Logger')} */
-const Logger = use('Logger')
 const Redis = use('Redis')
 /** @type {typeof import('@/Classes/StrategyHelpers/GetPriceHistory')} */
 const GetPriceHistory = use('App/Classes/StrategyHelpers/GetPriceHistory')
-const Strategy = use ('App/Models/Strategy')
 
-class RunGeneticAlgorithm {
+class RunGeneticAlgorithm extends EventEmitter{
   strategy
   initialBalance
   numberOfDays
@@ -18,6 +16,7 @@ class RunGeneticAlgorithm {
   candles
 
   constructor (strategy, initialBalance, numberOfDays, iterations, populationSize) {
+    super()
     this.setOptions(...arguments)
   }
 
@@ -32,10 +31,9 @@ class RunGeneticAlgorithm {
   /**
    * Run
    *
-   * @param {Socket} socket
    * @return {Promise<void>}
    */
-  async run (socket) {
+  async run () {
     await this.getCandles()
     const tradingStrategy = await getClass(this.strategy.indicator)
 
@@ -52,14 +50,11 @@ class RunGeneticAlgorithm {
     for (let loop = 1; loop <= this.iterations; loop++) {
       const startTime = moment()
       await ga.evolve()
-      Logger.info('Time Taken: ' + moment().diff(startTime, 'seconds'))
-      socket.emit('message', {
-        type: 'iteration',
-        data: {
-          iteration: loop,
-          best_value: ga.bestScore(),
-          best_options: ga.best()
-        }
+      this.emit('indicator', {
+        profit_loss: ga.bestScore(),
+        time_taken: moment().diff(startTime, 'seconds'),
+        options: ga.best(),
+        iteration: loop
       })
     }
   }
@@ -77,7 +72,6 @@ class RunGeneticAlgorithm {
 
   async _fitnessFunction (options) {
     try {
-      const startTime = moment()
       const clonedStrategy = JSON.parse(JSON.stringify(this.strategy))
       clonedStrategy.options = options
       const tradingStrategy = await createAndInitializeClass(clonedStrategy, true)
@@ -93,7 +87,6 @@ class RunGeneticAlgorithm {
         })
       }
 
-      Logger.info('Fitness Function Run Time: ' + moment().diff(startTime, 'seconds'))
       return tradingStrategy.orders.filter(a => a.profitLoss).reduce((total, a) => total + a.profitLoss, 0)
     } catch (e) {
       console.log('Genetic Model Error', e)
@@ -101,4 +94,4 @@ class RunGeneticAlgorithm {
   }
 }
 
-module.exports = RunGeneticAlgorithm
+export default RunGeneticAlgorithm
