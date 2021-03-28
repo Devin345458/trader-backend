@@ -41,8 +41,6 @@ class GeneticRunController {
       populationSize = 10
     }
     let oldStrategy = await Strategy.query().where('id', strategy.id).with('profile').firstOrFail()
-    oldStrategy.merge(strategy)
-
     const genetic = await GeneticRun.create({
       days: numberOfDays,
       initial_balance: initialBalance,
@@ -53,7 +51,7 @@ class GeneticRunController {
     })
 
     let count = 0
-    const Algo = new RunGeneticAlgorithm(oldStrategy.toObject(), initialBalance, numberOfDays, iterations, populationSize)
+    const Algo = new RunGeneticAlgorithm(JSON.parse(JSON.stringify(oldStrategy)), initialBalance, numberOfDays, iterations, populationSize)
     Algo.on('indicator', async (data) => {
       count++
       data.genetic_run_id = genetic.id

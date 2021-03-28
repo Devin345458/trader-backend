@@ -64,7 +64,7 @@ class StrategyController {
         })
       }
 
-      if (tmpIndicators.length === 100) {
+      if (tmpIndicators.length) {
         this.socket.emit('message', {
           type: 'indicator',
           data: tmpIndicators

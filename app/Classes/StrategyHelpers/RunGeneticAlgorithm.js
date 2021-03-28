@@ -50,12 +50,13 @@ class RunGeneticAlgorithm extends EventEmitter{
     for (let loop = 1; loop <= this.iterations; loop++) {
       const startTime = moment()
       await ga.evolve()
-      this.emit('indicator', {
+      const results = {
         profit_loss: ga.bestScore(),
         time_taken: moment().diff(startTime, 'seconds'),
         options: ga.best(),
         iteration: loop
-      })
+      }
+      this.emit('indicator', results)
     }
   }
 

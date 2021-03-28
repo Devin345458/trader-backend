@@ -226,7 +226,7 @@ class Trader extends EventEmitter {
           profitLoss: orderParams.price * orderParams.size - (orderParams.price * orderParams.size * 0.05) - this.positionInfo.positionAcquiredCost
         })
         this.positionInfo.positionExists = false
-        this.activeAccountBalance = orderSize * priceToSell
+        this.activeAccountBalance = (orderSize * priceToSell) - (orderParams.price * orderParams.size * 0.05)
         return
       }
 
@@ -314,7 +314,7 @@ class Trader extends EventEmitter {
         this.orders.push({...orderParams, time: ticker.time})
         this.positionInfo.positionExists = true
         this.positionInfo.positionAcquiredPrice = priceToBuy
-        this.positionInfo.positionAcquiredCost = priceToBuy * orderSize + this.highestFee
+        this.positionInfo.positionAcquiredCost = priceToBuy * orderSize + ((priceToBuy * orderSize) * 0.05)
         this.activeAccountBalance = orderSize
         return
       }

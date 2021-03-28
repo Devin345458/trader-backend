@@ -55,7 +55,14 @@ module.exports = async ( numberOfDays, coin, profile ) => {
   candles = candles.sort((a, b) => a[0] - b[0])
 
   // Convert Candles to Object
+  let previousCandle
   return candles.map((candle) => {
+    if (previousCandle) {
+      if (previousCandle[4] - 10000 > candle[4]) {
+        candle = previousCandle
+      }
+    }
+    previousCandle = candle
     return {
       time: candle[0],
       low: candle[1],

@@ -62,9 +62,3 @@ module.exports = {
     }]
   }
 }
-
-if (process.env.NODE_ENV === 'production') {
-  module.exports.local.tls = {
-    host: Env.get("REDIS_HOST", '127.0.0.1'),
-  }
-}
