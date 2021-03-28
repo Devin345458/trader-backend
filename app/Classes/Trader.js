@@ -223,10 +223,10 @@ class Trader extends EventEmitter {
         this.orders.push({
           ...orderParams,
           time: ticker.time,
-          profitLoss: orderParams.price * orderParams.size - (orderParams.price * orderParams.size * 0.05) - this.positionInfo.positionAcquiredCost
+          profitLoss: orderParams.price * orderParams.size - this.positionInfo.positionAcquiredCost // - (orderParams.price * orderParams.size * 0.05)
         })
         this.positionInfo.positionExists = false
-        this.activeAccountBalance = (orderSize * priceToSell) - (orderParams.price * orderParams.size * 0.05)
+        this.activeAccountBalance = (orderSize * priceToSell) // - (orderParams.price * orderParams.size * 0.05)
         return
       }
 
@@ -314,7 +314,7 @@ class Trader extends EventEmitter {
         this.orders.push({...orderParams, time: ticker.time})
         this.positionInfo.positionExists = true
         this.positionInfo.positionAcquiredPrice = priceToBuy
-        this.positionInfo.positionAcquiredCost = priceToBuy * orderSize + ((priceToBuy * orderSize) * 0.05)
+        this.positionInfo.positionAcquiredCost = priceToBuy * orderSize // + ((priceToBuy * orderSize) * 0.05)
         this.activeAccountBalance = orderSize
         return
       }
@@ -399,6 +399,7 @@ class Trader extends EventEmitter {
       return
     }
     this.tradeHistory.push(tick)
+    this.emit('candle', tick)
 
     if (!this.sim) {
       this.highestFee = await this.returnHighestFee()

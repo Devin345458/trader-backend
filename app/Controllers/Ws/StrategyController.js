@@ -4,7 +4,6 @@ const Redis = use('Redis')
 import run from "@/Classes/StrategyHelpers/PerfectTrading"
 import {createAndInitializeClass} from '@/Classes/StrategyHelpers/IndicatorFinder'
 import GetPriceHistory from '@/Classes/StrategyHelpers/GetPriceHistory'
-import RunGeneticAlgorithm from "@/Classes/StrategyHelpers/RunGeneticAlgorithm"
 
 const Strategy = use('App/Models/Strategy')
 
@@ -20,34 +19,28 @@ class StrategyController {
       oldStategy.merge(strategy)
       this.TradingStrategy = await this._setUpClass(oldStategy.toObject(), initialBalance)
       const candles = await this._loadCandles(numberOfDays)
-      this._setTradeListeners()
 
-      let tmpIndicators = []
-      this.TradingStrategy.on('indicators', ({name, indicator, time}) => {
-        tmpIndicators.push({
-          name,
-          indicator,
-          time
-        })
-        if (tmpIndicators.length === 100) {
-          this.socket.emit('message', {
-            type: 'indicator',
-            data: tmpIndicators
-          })
-          tmpIndicators = []
+
+      this._registerPush('indicator','indicators', ({name, indicator, time}) => {
+        return {name, indicator, time}
+      }, candles / 30)
+
+      this._registerPush('ticks', 'candle', data => {
+        return {
+          ...data,
+          low: data.close,
+          high: data.close,
         }
+      }, candles / 30)
+
+      this._registerPush('order', 'order', ({order, positionInfo}) => {
+        if (order.side === 'sell') {
+          order.profitLoss = order.price * order.size - positionInfo.positionAcquiredCost
+        }
+        return order
       })
 
-      let tmpCandles = [];
       for (let i = 0; i < candles.length; i = i + this.TradingStrategy.strategy.options.interval) {
-        tmpCandles.push(candles[i])
-        if (tmpCandles.length >= candles.length / 30) {
-          await this.socket.emit('message', {
-            type: 'ticks',
-            data: tmpCandles
-          })
-          tmpCandles = []
-        }
         await this.TradingStrategy.analyze({
           coin: strategy.coin,
           close: candles[i].close,
@@ -56,21 +49,7 @@ class StrategyController {
         })
       }
 
-      // Catch any not emitted candles
-      if (tmpCandles.length) {
-        await this.socket.emit('message', {
-          type: 'ticks',
-          data: tmpCandles
-        })
-      }
-
-      if (tmpIndicators.length) {
-        this.socket.emit('message', {
-          type: 'indicator',
-          data: tmpIndicators
-        })
-        tmpIndicators = []
-      }
+      this._clearBuffer()
 
       // Once done sell any remaining position
       if (this.TradingStrategy.positionInfo.positionExists) {
@@ -104,24 +83,36 @@ class StrategyController {
     return candles
   }
 
-  _setTradeListeners() {
-    this.TradingStrategy.on('order', ({order, positionInfo}) => {
-      if (order.side === 'sell') {
-        order.profitLoss = order.price * order.size - positionInfo.positionAcquiredCost
-      }
-      this.socket.emit('message', {
-        type: 'order',
-        data: order
-      })
-    })
-  }
-
   _calculateBestPNL(candles, initialBalance) {
     const bestPNL = run(candles, initialBalance)
     this.socket.emit('message', {
       type: 'best',
       data: bestPNL.toFixed(2)
     })
+  }
+
+  _registerPush(name, event, callback, length = 100) {
+    this.buffer = {}
+    this.TradingStrategy.on(event, (data) => {
+      if (!this.buffer[name]) this.buffer[name] = []
+      this.buffer[name].push(callback(data))
+      if (this.buffer[name].length === length) {
+        this.socket.emit('message', {
+          type: name,
+          data: this.buffer[name]
+        })
+        this.buffer[name] = []
+      }
+    })
+  }
+
+  _clearBuffer() {
+    for (let key in this.buffer) {
+      this.socket.emit('message', {
+        type: key,
+        data: this.buffer[key]
+      })
+    }
   }
 }
 

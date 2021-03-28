@@ -12,7 +12,7 @@
 
 const Env = use('Env')
 
-module.exports = {
+const redis = {
   /*
   |--------------------------------------------------------------------------
   | connection
@@ -64,7 +64,9 @@ module.exports = {
 }
 
 if (process.env.NODE_ENV === 'production') {
-  module.exports.local.tls = {
+  redis.local.tls = {
     host: Env.get("REDIS_HOST", '127.0.0.1'),
   }
 }
+
+module.exports = redis

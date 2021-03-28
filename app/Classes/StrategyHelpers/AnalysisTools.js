@@ -57,3 +57,16 @@ exports.vwma = function (tradeHistory, length) {
 
   return tempValue / tempVolume
 }
+
+exports.ma = function (tradeHistory, length) {
+  if (tradeHistory.length < length) {
+    return
+  }
+
+  const start = tradeHistory.length - length
+  const total = tradeHistory.slice(start, start + length).reduce((t, v) => {
+    return t + v.close
+  }, 0)
+
+  return total / length
+}
