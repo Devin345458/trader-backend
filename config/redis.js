@@ -36,7 +36,10 @@ const redis = {
     port: Env.get('REDIS_PORT', 6380),
     password: Env.get('REDIS_PASSWORD', null),
     db: 0,
-    keyPrefix: ''
+    keyPrefix: '',
+    tls: {
+      host: Env.get("REDIS_HOST", '127.0.0.1'),
+    },
   },
 
   /*
@@ -62,11 +65,3 @@ const redis = {
     }]
   }
 }
-
-if (process.env.NODE_ENV === 'production') {
-  redis.local.tls = {
-    host: Env.get("REDIS_HOST", '127.0.0.1'),
-  }
-}
-
-module.exports = redis
