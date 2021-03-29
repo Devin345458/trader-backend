@@ -15,28 +15,33 @@ class MovingAverage extends Trader {
     }
   ]
 
+  prevMa
 
   async analyze (tick) {
     await super.analyze(tick)
     const ma = AnalysisTools.ma(this.tradeHistory, this.strategy.options.period)
 
     // If we have don't have all our stats then
-    if (!ma) {
+    if (!ma || !this.prevMa) {
+      this.prevMa = ma
       return
     }
 
     this.emit('indicators', { time: tick.time, name: 'MA', indicator: ma, color: '#ffde5a' })
+    this.emit('indicators', { time: tick.time, name: 'PRV MA', indicator: this.prevMa, color: '#ffde5a' })
     if (!this.sim) {
       TradeIndicator.addIndicator(this.strategy.id, tick.time, 'MA', ma)
     }
 
-    if (!this.positionInfo.positionExists && tick.close < ma) {
+    if (!this.positionInfo.positionExists && this.prevMa < ma) {
       await this.buyPosition(tick.close, tick)
     }
 
-    if (this.positionInfo.positionExists && tick.close > ma) {
+    if (this.positionInfo.positionExists && this.prevMa > ma) {
       await this.sellPosition(tick.close, tick)
     }
+
+    this.prevMa = ma
   }
 
   static mutation (options) {
