@@ -12,7 +12,7 @@
 
 const Env = use('Env')
 
-const redis = {
+module.exports = {
   /*
   |--------------------------------------------------------------------------
   | connection
