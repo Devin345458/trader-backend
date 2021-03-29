@@ -1,3 +1,5 @@
+import tulind from "tulind";
+
 exports.vwap = (tick) => {
   if (this.tradeHistory.length >= this.strategy.vWapLength) {
     if (this.strategy.vWapMax && this.vwapCount > this.strategy.vWapMax) {
@@ -69,4 +71,14 @@ exports.ma = function (tradeHistory, length) {
   }, 0)
 
   return total / length
+}
+
+exports.rsi = async function (tradeHistory, length) {
+  const start = tradeHistory.length - length - 1
+  const close = tradeHistory.slice(start, start + length + 1).map(candle => candle.close)
+  const results = await tulind.indicators.rsi.indicator([close], [length]);
+  if (!results[0][0]) {
+   return
+  }
+  return results[0][0]
 }

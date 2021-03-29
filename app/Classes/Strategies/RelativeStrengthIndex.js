@@ -9,23 +9,23 @@ class MovingAverage extends Trader {
   static options = [
     {
       property: 'period',
-      label: 'Moving Average Length',
+      label: 'Relative Strength Index Length',
       type: 'number',
-      default: 10,
+      default: 3,
       required: true
     },
     {
-      property: 'buyOffset',
-      label: 'How far above the price does the moving average have to be to make a purchase',
-      type: 'Currency',
-      default: 30,
+      property: 'rsi_high',
+      label: 'RSI score to buy',
+      type: 'number',
+      default: 0.7,
       required: true
     },
     {
-      property: 'sellOffset',
-      label: 'How far below the price does the moving average have to be to sell',
-      type: 'Currency',
-      default: 30,
+      property: 'rsi_low',
+      label: 'RSI score to sell',
+      type: 'number',
+      default: 0.3,
       required: true
     }
   ]
@@ -34,29 +34,28 @@ class MovingAverage extends Trader {
 
   async analyze (tick) {
     await super.analyze(tick)
-    const ma = AnalysisTools.ma(this.tradeHistory, this.strategy.options.period)
+
+    //Do a simple moving average on close prices with period of 3.
+    const rsi = await AnalysisTools.rsi(this.tradeHistory, this.strategy.options.period)
+    // const ma = AnalysisTools.ma(this.tradeHistory, this.strategy.options.period)
 
     // If we have don't have all our stats then
-    if (!ma || !this.prevMa) {
-      this.prevMa = ma
+    if (!rsi) {
       return
     }
 
-    this.emit('indicators', { time: tick.time, name: 'MA', indicator: ma, color: '#ffde5a' })
-    this.emit('indicators', { time: tick.time, name: 'PRV MA', indicator: this.prevMa, color: '#ffde5a' })
+    this.emit('indicators', { time: tick.time, name: 'RSI', indicator: rsi, color: '#ffde5a' })
     if (!this.sim) {
-      TradeIndicator.addIndicator(this.strategy.id, tick.time, 'MA', ma)
+      TradeIndicator.addIndicator(this.strategy.id, tick.time, 'RSI', rsi)
     }
 
-    if (!this.positionInfo.positionExists && (tick.close + this.strategy.options.buyOffset) < ma) {
+    if (!this.positionInfo.positionExists && rsi < this.strategy.options.rsi_high) {
       await this.buyPosition(tick.close, tick)
     }
 
-    if (this.positionInfo.positionExists && tick.close > (ma + this.strategy.options.sellOffset)) {
+    if (this.positionInfo.positionExists && rsi < this.strategy.options.rsi_low) {
       await this.sellPosition(tick.close, tick)
     }
-
-    this.prevMa = ma
   }
 
   static mutation (options) {
@@ -70,11 +69,17 @@ class MovingAverage extends Trader {
     }
 
     if (super.shouldChange()) {
-      options.buyOffset += super.getRandomNumber(-30, 30)
+      options.rsi_high = Math.random()
+      if (options.rsi_high <= 0) {
+        options.rsi_high = 0.1
+      }
     }
 
     if (super.shouldChange()) {
-      options.sellOffset += super.getRandomNumber(-30, 30)
+      options.rsi_low = Math.random()
+      if (options.rsi_low <= 0) {
+        options.rsi_low = 0.1
+      }
     }
 
     return options

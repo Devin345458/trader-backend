@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon -r esm -r module-alias/register --inspect server.js",
-    "start": "node -r esm -r module-alias/register server.js",
+    "start": "pm2 start server.js --name app -i 2 --node-args=\"-r esm -r module-alias/register\"",
+    "stop": "pm2 stop app",
     "migrate": "node -r esm -r module-alias/register ace migration:run",
     "rollback": "node -r esm -r module-alias/register ace migration:rollback",
     "test": "node ace test"
@@ -45,7 +46,9 @@
     "module-alias": "^2.2.2",
     "moment": "^2.29.1",
     "mysql": "^2.18.1",
+    "pm2": "^4.5.5",
     "require-all": "^3.0.0",
+    "tulind": "^0.8.18",
     "url-parse": "^1.5.1"
   },
   "devDependencies": {},
